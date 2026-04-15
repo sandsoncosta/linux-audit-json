@@ -52,18 +52,6 @@ sudo bash install.sh
 
 ---
 
-## 🧪 Teste rápido
-
-```bash
-cat exemplo.log | linux-audit-json test
-```
-
-```bash
-linux-audit-json validate
-```
-
----
-
 ## 🧠 Pipeline interno
 
 | Etapa      | Função                    |
@@ -97,51 +85,42 @@ linux-audit-json validate
 
 ---
 
-## 📦 Estrutura
-
-```bash
-.
-├── main.py
-├── plugin.py
-├── config_loader.py
-├── parser.py
-├── correlator.py
-├── filters.py
-├── router.py
-├── models.py
-├── outputs/
-├── install.sh
-├── uninstall.sh
-└── agent.conf
-```
-
----
-
 ## 📊 Exemplo de saída
 
 ```json
 {
-  "event_id": "12345",
-  "timestamp": 1700000000.123,
-  "host": "server01",
-  "record_types": ["SYSCALL", "PATH"],
+  "event_id": "37837",
+  "timestamp": 1776258346.065,
+  "host": "rocky9.linuxvmimages.local",
+  "record_types": [
+    "SYSCALL",
+    "EXECVE",
+    "CWD",
+    "PATH",
+    "PROCTITLE"
+  ],
   "summary": {
-    "exe": "/usr/bin/bash",
-    "uid": "1000"
+    "syscall": "59",
+    "success": "yes",
+    "pid": "67832",
+    "uid": "1000",
+    "auid": "1000",
+    "comm": "whoami",
+    "exe": "/usr/bin/whoami",
+    "key": "recon",
+    "cmdline": "whoami",
+    "cwd": "/home/rockylinux/pasta-de-origem",
+    "filepath": "/usr/bin/whoami",
+    "proctitle": "whoami"
   },
-  "tags": ["auth"],
-  "route_name": "main",
-  "collector_version": "1.1.0"
+  "tags": [],
+  "route_name": "critical-to-siem",
+  "filter_name": "",
+  "collector_version": "1.1.0",
+  "config_hash": "6a563a5193e885edee2fa161defa0177830e64af9a45520f24796e75b9e91a15",
+  "agent_id": "rocky9.linuxvmimages.local@1.1.0"
 }
 ```
-
----
-
-## ⚠️ Boas práticas
-
-* Use como plugin do `audispd`
-* Prefira TCP com spool em produção
-* Revise bem os filtros (podem esconder eventos)
 
 ---
 
