@@ -1,0 +1,35 @@
+# /etc/logrotate.d/linux-audit-json
+#
+# Rotação de logs do linux-audit-json agent.
+# Instale com:
+#   sudo cp conf/linux-audit-json.logrotate /etc/logrotate.d/linux-audit-json
+#   sudo logrotate -d /etc/logrotate.d/linux-audit-json  # teste
+#   sudo logrotate -f /etc/logrotate.d/linux-audit-json  # força rotação
+
+/var/log/linux-audit-json/events.ndjson {
+    daily                   # rotaciona diariamente
+    rotate 7                # mantém 7 dias de histórico
+    compress                # comprime arquivos rotacionados (.gz)
+    delaycompress           # comprime com 1 dia de atraso (evita conflito com escrita ativa)
+    missingok               # não falha se o arquivo não existir
+    notifempty              # não rotaciona se o arquivo estiver vazio
+    create 0640 audit-agent audit-agent   # permissão do novo arquivo
+    sharedscripts
+
+    postrotate
+        # O plugin detecta rotação por inode automaticamente (no modo file).
+        # No modo plugin (audispd), o auditd gerencia o processo — não é necessário sinal.
+        # Este postrotate é mantido vazio intencionalmente.
+        true
+    endscript
+}
+
+/var/log/linux-audit-json/agent.log {
+    weekly                  # rotaciona semanalmente
+    rotate 4                # mantém 4 semanas
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 audit-agent audit-agent
+}

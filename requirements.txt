@@ -1,0 +1,7 @@
+# linux-audit-json — dependências Python
+#
+# O projeto foi intencionalmente projetado para usar apenas stdlib do Python 3.11+.
+# Nenhuma dependência externa é obrigatória para o agente em produção.
+#
+# Dependências opcionais para desenvolvimento e testes:
+pytest>=7.0

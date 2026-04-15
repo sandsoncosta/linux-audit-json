@@ -1,0 +1,70 @@
+# =============================================================================
+# linux-audit-json.service
+#
+# DOIS MODOS DE OPERAÇÃO — escolha um:
+#
+# MODO A — Plugin audispd (RECOMENDADO, padrão):
+#   O agente roda como processo filho do auditd, não como serviço systemd.
+#   Configure /etc/audit/plugins.d/linux-audit-json.conf e o auditd
+#   gerencia o ciclo de vida automaticamente.
+#   Este .service NAO é necessário nesse modo — desabilite-o:
+#     sudo systemctl disable linux-audit-json
+#
+# MODO B — Arquivo de log (source = file):
+#   Use este .service quando source.type=file no agent.conf.
+#   O agente lê /var/log/audit/audit.log continuamente.
+#   Útil quando não é possível usar o plugin do audispd.
+#
+# Para MODO B, edite /etc/linux-audit-json/agent.conf:
+#   [source:default]
+#   type = file
+#   path = /var/log/audit/audit.log
+# =============================================================================
+
+[Unit]
+Description=Linux Audit JSON Agent (modo file) — encaminha eventos do audit.log
+Documentation=https://github.com/seu-org/linux-audit-json
+After=network.target auditd.service
+Wants=auditd.service
+ConditionPathExists=/etc/linux-audit-json/agent.conf
+
+[Service]
+Type=simple
+User=audit-agent
+Group=audit-agent
+
+ExecStartPre=/usr/bin/python3.11 /opt/linux-audit-json/agent/main.py \
+    --conf /etc/linux-audit-json/agent.conf validate
+
+ExecStart=/usr/bin/python3.11 /opt/linux-audit-json/agent/main.py \
+    --conf /etc/linux-audit-json/agent.conf run
+
+ExecReload=/bin/kill -HUP $MAINPID
+
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=linux-audit-json
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+MemoryDenyWriteExecute=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+SystemCallArchitectures=native
+
+ReadWritePaths=/var/log/linux-audit-json
+ReadOnlyPaths=/var/log/audit
+
+[Install]
+WantedBy=multi-user.target

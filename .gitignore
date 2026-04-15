@@ -1,0 +1,5 @@
+cleanup-old-install.sh
+fix-auditd-queue.sh
+fix-permissions.sh
+PRESENTATION.md
+CHANGELOG_old.md

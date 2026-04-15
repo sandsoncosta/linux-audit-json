@@ -1,0 +1,200 @@
+# =============================================================================
+# linux-audit-json — agent.conf  (v1.1.0)
+# =============================================================================
+# Formato: INI estendido com seções nomeadas.
+# Sintaxe: [tipo:nome]  para seções com múltiplas instâncias
+# Comentários: # ou ;
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# [options] — parâmetros globais
+# -----------------------------------------------------------------------------
+[options]
+
+flush_interval  = 1.0     # segundos entre verificações de eventos expirados
+queue_size      = 10000   # tamanho máximo das filas internas
+retry_interval  = 5.0     # intervalo de retry para destinos remotos (segundos)
+worker_threads  = 2       # threads de worker (uso futuro)
+# hostname      = meu-srv # override do hostname (padrão: nome real do host)
+event_timeout   = 2.0     # timeout de correlação em segundos
+                          # eventos sem EOE são emitidos após este tempo
+
+
+# -----------------------------------------------------------------------------
+# [source:nome] — origem dos eventos
+# -----------------------------------------------------------------------------
+[source:default]
+
+# dispatcher = lê stdin (modo plugin do audispd — recomendado)
+# file       = lê arquivo em modo tail contínuo
+type = dispatcher
+
+# Usado apenas quando type = file:
+# path = /var/log/audit/audit.log
+
+
+# -----------------------------------------------------------------------------
+# [parser] — comportamento do parser
+# -----------------------------------------------------------------------------
+[parser]
+
+preserve_raw      = yes   # inclui linha bruta original no JSON (útil para forense)
+include_metadata  = yes   # inclui host, versão, rota, config_hash no JSON
+
+
+# -----------------------------------------------------------------------------
+# [filter:nome] — filtros de eventos
+#
+# Condições: todas as presentes são avaliadas com AND lógico.
+# Ordem de avaliação: menor priority = avaliado primeiro.
+#
+# action:
+#   drop  → descarta o evento para esta rota
+#   allow → aceita explicitamente (útil como exceção antes de um drop mais amplo)
+#   tag   → adiciona tag ao evento e continua (não descarta)
+#
+# ATENÇÃO: filtros drop reduzem o volume de dados enviados ao SIEM.
+# Toda alteração de filtros é registrada no log interno com o hash da config
+# ativa, permitindo auditoria de mudanças. Use com critério — um filtro
+# drop em record_types = SYSCALL, por exemplo, oculta execução de processos.
+# -----------------------------------------------------------------------------
+
+# Ignora o próprio agente para evitar loop de auditoria
+[filter:ignore-agent]
+action      = drop
+priority    = 10
+executables = /usr/bin/python3.11 /usr/sbin/linux-audit-json
+
+# Ignora registros CWD isolados (muito ruidosos, baixo valor analítico)
+[filter:ignore-cwd-only]
+action       = drop
+priority     = 20
+record_types = CWD
+
+# Ignora operações bem-sucedidas em caminhos temporários/virtuais
+[filter:ignore-tmp-proc]
+action   = drop
+priority = 30
+paths    = /tmp /proc /sys/fs
+success  = yes
+
+# Ignora a própria auditoria do auditd
+[filter:ignore-auditd]
+action      = drop
+priority    = 40
+executables = /sbin/auditd /sbin/audispd
+
+# Marca eventos de autenticação para roteamento diferenciado
+[filter:tag-auth]
+action       = tag
+priority     = 50
+tag          = auth
+record_types = USER_AUTH USER_LOGIN USER_LOGOUT
+
+# Marca falhas de syscall como críticas
+[filter:tag-critical]
+action   = tag
+priority = 60
+tag      = critical
+success  = no
+
+[filter:tag-whoami]
+action      = tag
+priority    = 15
+tag         = Possible Recon
+executables = /usr/bin/whoami
+
+# -----------------------------------------------------------------------------
+# [destination:nome] — destinos de saída
+# -----------------------------------------------------------------------------
+
+# Arquivo local NDJSON — recebe todos os eventos não descartados
+[destination:local-file]
+type    = file
+enabled = yes
+path    = /var/log/linux-audit-json/events.ndjson
+
+# fsync = yes força escrita imediata em disco após cada evento.
+# Garante que nenhum evento seja perdido em caso de crash do processo,
+# mas tem custo de performance (I/O por evento).
+# Recomendado: yes em ambientes críticos, no em alto volume.
+fsync   = no
+
+
+# Destino TCP para SIEM
+[destination:siem-tcp]
+type           = tcp
+enabled        = yes
+host           = 192.168.145.148
+port           = 10005
+timeout        = 5.0
+retries        = 3
+retry_interval = 5.0
+
+# Fila persistente em disco (spool):
+# Quando o SIEM estiver offline, eventos são gravados no spool e
+# reenviados automaticamente quando a conexão for restaurada.
+# Sem spool_dir configurado, eventos são descartados se a fila em
+# memória encher ou o processo reiniciar.
+#
+# spool_dir    = /var/log/linux-audit-json/spool
+# spool_max_mb = 100    # tamanho máximo do spool (padrão: 100MB)
+
+
+# Destino UDP secundário (desabilitado por padrão)
+[destination:secondary-udp]
+type    = udp
+enabled = no
+host    = 192.168.1.20
+port    = 5514
+timeout = 2.0
+
+# Destino stdout — BLOQUEADO EM PRODUÇÃO
+# O tipo stdout não é permitido com enabled = yes.
+# Para testes locais, use o modo 'test' da CLI:
+#   echo "..." | linux-audit-json test
+# [destination:stdout]
+# type    = stdout
+# enabled = no
+
+
+# -----------------------------------------------------------------------------
+# [route:nome] — regras de roteamento
+# -----------------------------------------------------------------------------
+
+# Rota principal: tudo que não foi descartado → arquivo local
+[route:all-to-file]
+source       = default
+filters      = ignore-agent, ignore-cwd-only, ignore-tmp-proc, ignore-auditd, 
+destinations = local-file
+
+# Rota SIEM: eventos críticos e de autenticação → TCP
+[route:critical-to-siem]
+source       = default
+filters      = tag-critical, tag-auth
+destinations = siem-tcp
+
+
+# -----------------------------------------------------------------------------
+# [logging] — log interno do próprio agente
+# -----------------------------------------------------------------------------
+[logging]
+
+# Nível: DEBUG | INFO | WARNING | ERROR
+level        = INFO
+
+# Arquivo de log interno do agente (separado dos eventos coletados)
+file         = /var/log/linux-audit-json/agent.log
+
+# O systemd captura stderr automaticamente no journald
+use_journald = yes
+
+
+# -----------------------------------------------------------------------------
+# [security] — identidade do processo
+# -----------------------------------------------------------------------------
+[security]
+
+user  = audit-agent
+group = audit-agent

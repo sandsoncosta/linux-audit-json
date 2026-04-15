@@ -1,0 +1,20 @@
+# /etc/audit/plugins.d/linux-audit-json.conf
+#
+# Configuração do plugin audispd para encaminhar eventos
+# ao linux-audit-json agent.
+#
+# Após criar este arquivo, reinicie o auditd:
+#   systemctl restart auditd
+#
+# Referência: man audispd-plugins(5)
+#
+# IMPORTANTE: usar o wrapper plugin (linux-audit-json-plugin), NÃO o
+# wrapper principal (linux-audit-json). O audispd exige um processo
+# simples que leia stdin — não um serviço systemd.
+
+active      = yes
+direction   = out
+path        = /usr/local/bin/linux-audit-json-plugin
+type        = always
+args        = --conf /etc/linux-audit-json/agent.conf
+format      = string
